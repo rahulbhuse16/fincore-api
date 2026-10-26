@@ -1,0 +1,232 @@
+spring:
+  config:
+    import: file:E:/fincore/.env[.properties]
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 500ms
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 10s
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${CORS_ALLOWED_ORIGINS:}
+            allowedMethods: [GET, POST, PATCH, OPTIONS]
+            allowedHeaders: [Authorization, Content-Type, Idempotency-Key, X-Correlation-Id]
+            exposedHeaders: [X-Correlation-Id, Location, Idempotent-Replay]
+            maxAge: 600
+      default-filters:
+        - SecureHeaders
+        - name: Retry            # idempotent reads only; a write is NEVER retried by the gateway
+          args:
+            retries: 2
+            methods: GET
+            statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE
+            backoff:
+              firstBackoff: 50ms
+              maxBackoff: 500ms
+              factor: 2
+      routes:
+        - id: auth
+          uri: http://${IDENTITY_SERVICE_HOST:identity-service}:8081
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@authRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: identity-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: customer-accounts
+          uri: http://${ACCOUNT_SERVICE_HOST:account-service}:8083
+          predicates:
+            - Path=/api/v1/customers/*/accounts
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: account-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: customers
+          uri: http://${CUSTOMER_SERVICE_HOST:customer-service}:8082
+          predicates:
+            - Path=/api/v1/customers/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: customer-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: account-balance
+          uri: http://${LEDGER_SERVICE_HOST:ledger-service}:8085
+          predicates:
+            - Path=/api/v1/accounts/*/balance
+          filters:
+            - RewritePath=/api/v1/accounts/(?<id>[^/]+)/balance, /api/v1/ledger/accounts/$\{id}/balance
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: ledger-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: account-transactions
+          uri: http://${TRANSACTION_SERVICE_HOST:transaction-service}:8084
+          predicates:
+            - Path=/api/v1/accounts/*/transactions
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: transaction-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: accounts
+          uri: http://${ACCOUNT_SERVICE_HOST:account-service}:8083
+          predicates:
+            - Path=/api/v1/accounts/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: account-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: transfers
+          uri: http://${TRANSACTION_SERVICE_HOST:transaction-service}:8084
+          predicates:
+            - Path=/api/v1/transfers/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: transaction-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: ledger
+          uri: http://${LEDGER_SERVICE_HOST:ledger-service}:8085
+          predicates:
+            - Path=/api/v1/ledger/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: ledger-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: risk
+          uri: http://${RISK_SERVICE_HOST:risk-service}:8086
+          predicates:
+            - Path=/api/v1/risk/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: risk-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: notifications
+          uri: http://${NOTIFICATION_SERVICE_HOST:notification-service}:8087
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: notification-service
+                fallbackUri: forward:/fallback/unavailable
+        - id: reconciliation
+          uri: http://${RECONCILIATION_SERVICE_HOST:reconciliation-service}:8088
+          predicates:
+            - Path=/api/v1/reconciliation/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@apiRateLimiter}"
+                key-resolver: "#{@principalKeyResolver}"
+                deny-empty-key: false
+            - name: CircuitBreaker
+              args:
+                name: reconciliation-service
+                fallbackUri: forward:/fallback/unavailable
+
+server:
+  port: 8080
+  shutdown: graceful
+
+fincore:
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    issuer: fincore-identity
+  ratelimit:
+    api:
+      replenish-rate: ${RATE_LIMIT_API_RPS:20}
+      burst-capacity: ${RATE_LIMIT_API_BURST:40}
+    auth:
+      replenish-rate: ${RATE_LIMIT_AUTH_RPS:2}
+      burst-capacity: ${RATE_LIMIT_AUTH_BURST:5}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 10s
+
+management:
+  endpoints.web.exposure.include: health,info,prometheus,metrics
+  endpoint.health.probes.enabled: true
+  endpoint.health.show-details: never
+  metrics.tags.application: ${spring.application.name}
+  tracing.sampling.probability: ${TRACING_SAMPLING:1.0}
+  otlp.tracing.endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  level:
+    root: INFO

@@ -1,0 +1,9 @@
+target/
+.env
+.verify/
+*.zip
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
