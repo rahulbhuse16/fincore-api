@@ -14,6 +14,7 @@ permissions:
   contents: read
 
 jobs:
+
   # 1. Domain verification
   domain-tests:
     name: Domain Tests
@@ -32,6 +33,7 @@ jobs:
       - name: Verify domain
         run: bash scripts/verify-domain.sh
 
+
   # 2. Build and integration tests
   build-and-test:
     name: Build and Test
@@ -48,6 +50,7 @@ jobs:
           java-version: "21"
           cache: maven
 
+      # Diagnose Docker daemon
       - name: Diagnose Docker environment
         run: |
           echo "=== Docker API environment ==="
@@ -63,15 +66,27 @@ jobs:
           echo "=== Running containers ==="
           docker ps
 
+      # Configure Docker Java API for Testcontainers
+      - name: Configure Testcontainers Docker API
+        run: |
+          mkdir -p customer-service/src/test/resources
+          echo "api.version=1.44" > customer-service/src/test/resources/docker-java.properties
+
+          echo "=== Docker Java configuration ==="
+          cat customer-service/src/test/resources/docker-java.properties
+
+      # Inspect actual resolved dependencies
       - name: Inspect Testcontainers dependencies
         run: |
           mvn -B -ntp -pl customer-service dependency:tree \
             -Dverbose \
             -Dincludes=org.testcontainers:*,com.github.docker-java:*
 
+      # Build and run all tests
       - name: Build and Test
         run: mvn -B -ntp verify
 
+      # Upload reports even when build fails
       - name: Upload Test Reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -82,6 +97,7 @@ jobs:
             **/target/failsafe-reports/**
           if-no-files-found: ignore
           retention-days: 7
+
 
   # 3. Docker Compose validation
   compose-validate:
