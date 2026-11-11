@@ -33,6 +33,13 @@ jobs:
         run: bash scripts/verify-domain.sh
 
 
+      - name: Inspect Docker Java dependencies
+        run: |
+          echo "=== Testcontainers and Docker Java versions ==="
+          mvn -B -ntp -pl customer-service dependency:tree \
+            -Dverbose \
+            -Dincludes=org.testcontainers:*,com.github.docker-java:*
+
   # 2. Build and integration tests
   build-and-test:
     name: Build and Test
