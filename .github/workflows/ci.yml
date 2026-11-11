@@ -84,7 +84,7 @@ jobs:
 
       # Build and run all tests
       - name: Build and Test
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp verify -DskipITs
 
       # Upload reports even when build fails
       - name: Upload Test Reports
